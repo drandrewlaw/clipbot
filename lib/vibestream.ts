@@ -44,7 +44,8 @@ export interface Moment {
 export async function checkStream(
   youtubeUrl: string,
   condition: string,
-  model: "gemini-2.5-flash" | "gpt-4o-mini" = "gemini-2.5-flash"
+  model: "gemini-2.5-flash" | "gpt-4o-mini" = "gemini-2.5-flash",
+  includeFrame: boolean = true
 ): Promise<CheckOnceResponse> {
   const response = await fetch(`${VIBESTREAM_API}/check-once`, {
     method: "POST",
@@ -55,7 +56,7 @@ export async function checkStream(
       youtube_url: youtubeUrl,
       condition,
       model,
-      include_frame: false,
+      include_frame: includeFrame,
     }),
   });
 
@@ -64,6 +65,21 @@ export async function checkStream(
   }
 
   return response.json();
+}
+
+/**
+ * Extract video ID from YouTube URL
+ */
+export function extractVideoId(url: string): string | null {
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Get YouTube video thumbnail URL
+ */
+export function getThumbnailUrl(videoId: string, quality: "maxres" | "high" | "medium" | "default" = "high"): string {
+  return `https://img.youtube.com/vi/${videoId}/${quality}.jpg`;
 }
 
 /**

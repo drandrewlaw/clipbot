@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await checkStream(youtubeUrl, condition, model || "gemini-2.5-flash");
+    const result = await checkStream(youtubeUrl, condition, model || "gemini-2.5-flash", true); // Enable frame capture
 
     return NextResponse.json(result);
   } catch (error) {

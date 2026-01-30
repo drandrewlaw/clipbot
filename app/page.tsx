@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Play, Pause, Sparkles, Clock, TrendingUp, Loader2, AlertCircle } from "lucide-react";
+import { Plus, Play, Pause, Sparkles, Clock, TrendingUp, Loader2, AlertCircle, Download, Video, Image as ImageIcon } from "lucide-react";
 
 interface Stream {
   id: string;
@@ -19,7 +19,10 @@ interface Moment {
   timestamp: string;
   caption: string;
   score: number;
-  thumbnail?: string;
+  frame?: string; // base64 image data
+  videoUrl?: string; // URL to generated video clip
+  streamUrl?: string; // Original stream URL for clip generation
+  videoId?: string; // YouTube video ID
 }
 
 // Viral moment detection conditions
@@ -154,13 +157,16 @@ export default function Dashboard() {
           }
         }
 
-        // Add the moment with its viral score
+        // Add the moment with its viral score AND frame capture
         const newMoment: Moment = {
           id: Date.now().toString(),
           streamId: stream.id,
           timestamp: new Date().toLocaleTimeString(),
           caption: data.explanation,
           score: Math.min(score, 100),
+          frame: data.frame_b64 || undefined, // Captured frame from VibeStream
+          streamUrl: stream.url, // Store for clip generation
+          videoId: stream.videoId, // Store video ID
         };
 
         setMoments(prev => [newMoment, ...prev].slice(0, 20)); // Keep last 20 moments
@@ -337,6 +343,17 @@ export default function Dashboard() {
                     key={moment.id}
                     className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 transition-all hover:border-slate-700"
                   >
+                    {/* Frame Image Display */}
+                    {moment.frame && (
+                      <div className="mb-3 rounded-lg overflow-hidden bg-slate-950">
+                        <img
+                          src={`data:image/jpeg;base64,${moment.frame}`}
+                          alt="Captured moment"
+                          className="w-full h-auto object-cover max-h-48"
+                        />
+                      </div>
+                    )}
+
                     <div className="flex items-start gap-3">
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-yellow-500/20">
                         <Sparkles className="h-5 w-5 text-yellow-500" />
@@ -357,6 +374,40 @@ export default function Dashboard() {
                           }`}>
                             ★ {moment.score}% viral
                           </span>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {/* Download Frame Button */}
+                          {moment.frame && (
+                            <button
+                              onClick={() => {
+                                const link = document.createElement("a");
+                                link.href = `data:image/jpeg;base64,${moment.frame}`;
+                                link.download = `clipbot-moment-${moment.id}.jpg`;
+                                link.click();
+                              }}
+                              className="flex items-center gap-1.5 rounded-lg bg-blue-500/20 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-500/30 transition-colors"
+                            >
+                              <ImageIcon className="h-3 w-3" />
+                              Download Frame
+                            </button>
+                          )}
+
+                          {/* Generate Video Clip Button */}
+                          <button
+                            onClick={() => window.open(
+                              moment.streamUrl
+                                ? `https://www.youtubekidd.com/?${moment.videoId}`
+                                : moment.streamUrl || "#",
+                              "_blank"
+                            )}
+                            className="flex items-center gap-1.5 rounded-lg bg-purple-500/20 px-3 py-1.5 text-xs font-medium text-purple-400 hover:bg-purple-500/30 transition-colors"
+                            title="Open video to clip manually"
+                          >
+                            <Video className="h-3 w-3" />
+                            Open Video
+                          </button>
                         </div>
                       </div>
                     </div>
