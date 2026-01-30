@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Play, Pause, Sparkles, Clock, TrendingUp, Loader2, AlertCircle, Download, Video, Image as ImageIcon } from "lucide-react";
+import { Plus, Play, Pause, Sparkles, Clock, TrendingUp, Loader2, AlertCircle, Download, Video, Image as ImageIcon, Gift } from "lucide-react";
 
 interface Stream {
   id: string;
@@ -20,9 +20,11 @@ interface Moment {
   caption: string;
   score: number;
   frame?: string; // base64 image data
+  gif?: string; // base64 GIF data
   videoUrl?: string; // URL to generated video clip
   streamUrl?: string; // Original stream URL for clip generation
   videoId?: string; // YouTube video ID
+  generatingGif?: boolean; // Show loading state
 }
 
 // Viral moment detection conditions
@@ -390,20 +392,94 @@ export default function Dashboard() {
                               className="flex items-center gap-1.5 rounded-lg bg-blue-500/20 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-500/30 transition-colors"
                             >
                               <ImageIcon className="h-3 w-3" />
-                              Download Frame
+                              Frame
                             </button>
                           )}
 
-                          {/* Generate Video Clip Button */}
+                          {/* Generate GIF Button */}
+                          <button
+                            onClick={async () => {
+                              // Update moment to show loading state
+                              setMoments(prev => prev.map(m =>
+                                m.id === moment.id ? { ...m, generatingGif: true } : m
+                              ));
+
+                              try {
+                                const response = await fetch("/api/gif/generate", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    youtubeUrl: moment.streamUrl,
+                                    startTime: 0,
+                                    duration: 5,
+                                    fps: 10,
+                                    width: 480,
+                                  }),
+                                });
+
+                                const data = await response.json();
+
+                                if (data.success && data.gifData) {
+                                  // Update moment with GIF data
+                                  setMoments(prev => prev.map(m =>
+                                    m.id === moment.id ? { ...m, gif: data.gifData, generatingGif: false } : m
+                                  ));
+                                }
+                              } catch (error) {
+                                console.error("Error generating GIF:", error);
+                                setMoments(prev => prev.map(m =>
+                                  m.id === moment.id ? { ...m, generatingGif: false } : m
+                                ));
+                              }
+                            }}
+                            disabled={moment.generatingGif || !!moment.gif}
+                            className="flex items-center gap-1.5 rounded-lg bg-pink-500/20 px-3 py-1.5 text-xs font-medium text-pink-400 hover:bg-pink-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {moment.generatingGif ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Gift className="h-3 w-3" />
+                            )}
+                            {moment.gif ? "GIF Ready" : moment.generatingGif ? "Generating..." : "Generate GIF"}
+                          </button>
+
+                          {/* Download GIF Button */}
+                          {moment.gif && (
+                            <button
+                              onClick={() => {
+                                const link = document.createElement("a");
+                                link.href = `data:image/gif;base64,${moment.gif}`;
+                                link.download = `clipbot-moment-${moment.id}.gif`;
+                                link.click();
+                              }}
+                              className="flex items-center gap-1.5 rounded-lg bg-green-500/20 px-3 py-1.5 text-xs font-medium text-green-400 hover:bg-green-500/30 transition-colors"
+                            >
+                              <Download className="h-3 w-3" />
+                              Download GIF
+                            </button>
+                          )}
+
+                          {/* Open Video Button */}
                           <button
                             onClick={() => window.open(moment.streamUrl, "_blank")}
                             className="flex items-center gap-1.5 rounded-lg bg-purple-500/20 px-3 py-1.5 text-xs font-medium text-purple-400 hover:bg-purple-500/30 transition-colors"
                             title="Open video to clip manually"
                           >
                             <Video className="h-3 w-3" />
-                            Open Video
+                            Video
                           </button>
                         </div>
+
+                        {/* GIF Preview */}
+                        {moment.gif && (
+                          <div className="mt-3 rounded-lg overflow-hidden bg-slate-950">
+                            <img
+                              src={`data:image/gif;base64,${moment.gif}`}
+                              alt="Generated GIF"
+                              className="w-full h-auto"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
