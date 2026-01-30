@@ -396,12 +396,7 @@ export default function Dashboard() {
 
                           {/* Generate Video Clip Button */}
                           <button
-                            onClick={() => window.open(
-                              moment.streamUrl
-                                ? `https://www.youtubekidd.com/?${moment.videoId}`
-                                : moment.streamUrl || "#",
-                              "_blank"
-                            )}
+                            onClick={() => window.open(moment.streamUrl, "_blank")}
                             className="flex items-center gap-1.5 rounded-lg bg-purple-500/20 px-3 py-1.5 text-xs font-medium text-purple-400 hover:bg-purple-500/30 transition-colors"
                             title="Open video to clip manually"
                           >
