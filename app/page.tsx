@@ -1,63 +1,370 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useEffect } from "react";
+import { Plus, Play, Pause, Sparkles, Clock, TrendingUp, Loader2, AlertCircle } from "lucide-react";
+
+interface Stream {
+  id: string;
+  url: string;
+  title: string;
+  videoId: string;
+  status: "monitoring" | "idle" | "error" | "checking";
+  jobId?: string;
+  lastChecked?: string;
+}
+
+interface Moment {
+  id: string;
+  streamId: string;
+  timestamp: string;
+  caption: string;
+  score: number;
+  thumbnail?: string;
+}
+
+// Viral moment detection conditions
+const VIRAL_CONDITIONS = [
+  "Describe what you see in detail",
+  "Is something funny, surprising, or shocking happening?",
+  "Is there an exciting or intense moment?",
+  "Is there something unusual or interesting?",
+  "What action or activity is occurring?",
+];
+
+// Random condition for demonstration
+const getRandomCondition = () => {
+  return VIRAL_CONDITIONS[Math.floor(Math.random() * VIRAL_CONDITIONS.length)];
+};
+
+export default function Dashboard() {
+  const [streams, setStreams] = useState<Stream[]>([]);
+  const [moments, setMoments] = useState<Moment[]>([]);
+  const [newStreamUrl, setNewStreamUrl] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Poll streams that are in monitoring state
+  useEffect(() => {
+    const monitoringStreams = streams.filter(s => s.status === "monitoring");
+
+    if (monitoringStreams.length === 0) return;
+
+    const interval = setInterval(async () => {
+      for (const stream of monitoringStreams) {
+        await checkStreamForMoments(stream);
+      }
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [streams]);
+
+  const extractVideoId = (url: string): string | null => {
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
+    return match ? match[1] : null;
+  };
+
+  const addStream = async () => {
+    if (!newStreamUrl.trim()) return;
+
+    const videoId = extractVideoId(newStreamUrl);
+    if (!videoId) {
+      alert("Invalid YouTube URL");
+      return;
+    }
+
+    const newStream: Stream = {
+      id: Date.now().toString(),
+      url: newStreamUrl,
+      title: `Stream ${streams.length + 1}`,
+      videoId,
+      status: "idle",
+    };
+
+    setStreams([...streams, newStream]);
+    setNewStreamUrl("");
+  };
+
+  const toggleMonitoring = async (id: string) => {
+    const stream = streams.find(s => s.id === id);
+    if (!stream) return;
+
+    if (stream.status === "monitoring") {
+      // Stop monitoring
+      setStreams(streams.map(s =>
+        s.id === id ? { ...s, status: "idle" } : s
+      ));
+    } else {
+      // Start monitoring - do an initial check
+      setStreams(streams.map(s =>
+        s.id === id ? { ...s, status: "monitoring" } : s
+      ));
+      await checkStreamForMoments({ ...stream, status: "monitoring" });
+    }
+  };
+
+  const checkStreamForMoments = async (stream: Stream) => {
+    try {
+      // Update stream status to checking
+      setStreams(prev => prev.map(s =>
+        s.id === stream.id ? { ...s, status: "checking" } : s
+      ));
+
+      const condition = getRandomCondition();
+
+      const response = await fetch("/api/stream/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          youtubeUrl: stream.url,
+          condition,
+          model: "gemini-2.5-flash",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to check stream");
+      }
+
+      const data = await response.json();
+
+      // Update stream status back to monitoring
+      setStreams(prev => prev.map(s =>
+        s.id === stream.id ? {
+          ...s,
+          status: "monitoring",
+          lastChecked: new Date().toLocaleTimeString(),
+        } : s
+      ));
+
+      // If the moment was triggered, add it to the list
+      if (data.triggered && data.explanation) {
+        // Calculate viral score based on keywords in the explanation
+        const viralKeywords = [
+          "funny", "exciting", "surprising", "shocking", "unusual",
+          "emotional", "reaction", "fail", "win", "clutch",
+          "intense", "dramatic", "unexpected", "amazing", "cat",
+          "dog", "animal", "viral", "trending", "epic"
+        ];
+
+        const lowerResult = data.explanation.toLowerCase();
+        let score = 40; // base score (triggered moments start higher)
+
+        for (const keyword of viralKeywords) {
+          if (lowerResult.includes(keyword)) {
+            score += 10;
+          }
+        }
+
+        // Add the moment with its viral score
+        const newMoment: Moment = {
+          id: Date.now().toString(),
+          streamId: stream.id,
+          timestamp: new Date().toLocaleTimeString(),
+          caption: data.explanation,
+          score: Math.min(score, 100),
+        };
+
+        setMoments(prev => [newMoment, ...prev].slice(0, 20)); // Keep last 20 moments
+      }
+    } catch (error) {
+      console.error("Error checking stream:", error);
+      setStreams(prev => prev.map(s =>
+        s.id === stream.id ? { ...s, status: "error" } : s
+      ));
+    }
+  };
+
+  const removeStream = (id: string) => {
+    setStreams(streams.filter(s => s.id !== id));
+    setMoments(moments.filter(m => m.streamId !== id));
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+      {/* Header */}
+      <header className="border-b border-slate-800 bg-slate-950/50 backdrop-blur-xl">
+        <div className="mx-auto max-w-7xl px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500">
+                <Sparkles className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold">ClipBot</h1>
+                <p className="text-xs text-slate-400">Viral Moment Detective</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-lg bg-slate-800/50 px-3 py-1.5">
+                <div className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+                <span className="text-xs text-slate-300">{streams.filter(s => s.status === "monitoring").length} monitoring</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg bg-yellow-500/10 px-3 py-1.5">
+                <Sparkles className="h-3 w-3 text-yellow-500" />
+                <span className="text-xs text-yellow-500">{moments.length} moments</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-6 py-8">
+        {/* Add Stream Section */}
+        <section className="mb-8">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+            <h2 className="mb-4 text-lg font-semibold">Add Stream to Monitor</h2>
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={newStreamUrl}
+                onChange={(e) => setNewStreamUrl(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && addStream()}
+                placeholder="https://www.youtube.com/watch?v=..."
+                className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm placeholder:text-slate-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              />
+              <button
+                onClick={addStream}
+                disabled={isLoading}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-6 py-3 font-medium transition-all hover:from-violet-600 hover:to-fuchsia-600 disabled:opacity-50"
+              >
+                <Plus className="h-4 w-4" />
+                Add Stream
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-slate-500">
+              💡 Try any live YouTube stream! ClipBot will analyze it for viral-worthy moments.
+            </p>
+          </div>
+        </section>
+
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+          {/* Streams List */}
+          <section>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Monitored Streams</h2>
+              <span className="text-sm text-slate-400">{streams.length} total</span>
+            </div>
+            <div className="space-y-3">
+              {streams.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/30 p-8 text-center">
+                  <Sparkles className="mx-auto mb-3 h-10 w-10 text-slate-600" />
+                  <p className="text-slate-400">No streams yet. Add one above to start detecting viral moments!</p>
+                </div>
+              ) : (
+                streams.map((stream) => (
+                  <div
+                    key={stream.id}
+                    className="flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-900/50 p-4 transition-all hover:border-slate-700"
+                  >
+                    <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-lg bg-slate-950 overflow-hidden">
+                      <img
+                        src={`https://img.youtube.com/vi/${stream.videoId}/mqdefault.jpg`}
+                        alt=""
+                        className="h-full w-full rounded-lg object-cover"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{stream.title}</p>
+                      <p className="text-xs text-slate-400 truncate">{stream.url}</p>
+                      <div className="mt-1 flex items-center gap-2 text-xs">
+                        {stream.status === "checking" && (
+                          <span className="flex items-center gap-1 text-blue-400">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Checking...
+                          </span>
+                        )}
+                        {stream.status === "monitoring" && stream.lastChecked && (
+                          <span className="text-slate-500">Last: {stream.lastChecked}</span>
+                        )}
+                        {stream.status === "error" && (
+                          <span className="flex items-center gap-1 text-red-400">
+                            <AlertCircle className="h-3 w-3" />
+                            Error
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => toggleMonitoring(stream.id)}
+                      disabled={stream.status === "checking"}
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-all ${
+                        stream.status === "monitoring" || stream.status === "checking"
+                          ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                          : "bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                      } ${stream.status === "checking" ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                      {stream.status === "checking" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : stream.status === "monitoring" ? (
+                        <Pause className="h-4 w-4" />
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => removeStream(stream.id)}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-400 hover:bg-red-500/20 hover:text-red-400 transition-all"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
+          {/* Detected Moments */}
+          <section>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-yellow-500" />
+                Viral Moments Detected
+              </h2>
+              <span className="text-sm text-slate-400">{moments.length} found</span>
+            </div>
+            <div className="space-y-3">
+              {moments.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/30 p-8 text-center">
+                  <Clock className="mx-auto mb-3 h-10 w-10 text-slate-600" />
+                  <p className="text-slate-400">
+                    {streams.length === 0
+                      ? "Add a stream to start detecting moments!"
+                      : "Monitoring for viral moments... This may take a moment."}
+                  </p>
+                </div>
+              ) : (
+                moments.map((moment) => (
+                  <div
+                    key={moment.id}
+                    className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 transition-all hover:border-slate-700"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-yellow-500/20">
+                        <Sparkles className="h-5 w-5 text-yellow-500" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">{moment.caption}</p>
+                        <div className="mt-2 flex items-center gap-3 text-xs">
+                          <span className="flex items-center gap-1 text-slate-400">
+                            <Clock className="h-3 w-3" />
+                            {moment.timestamp}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full ${
+                            moment.score >= 80
+                              ? "bg-yellow-500/20 text-yellow-500"
+                              : moment.score >= 60
+                              ? "bg-orange-500/20 text-orange-500"
+                              : "bg-blue-500/20 text-blue-500"
+                          }`}>
+                            ★ {moment.score}% viral
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
         </div>
       </main>
     </div>
