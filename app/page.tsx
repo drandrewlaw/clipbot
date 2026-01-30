@@ -3,11 +3,15 @@
 import { useState, useEffect } from "react";
 import { Plus, Play, Pause, Sparkles, Clock, TrendingUp, Loader2, AlertCircle, Download, Video, Image as ImageIcon, Gift, Share2, Copy, Check } from "lucide-react";
 
+type Platform = "youtube" | "twitch";
+
 interface Stream {
   id: string;
   url: string;
   title: string;
-  videoId: string;
+  platform: Platform;
+  videoId?: string; // YouTube video ID
+  channelName?: string; // Twitch channel name
   status: "monitoring" | "idle" | "error" | "checking";
   jobId?: string;
   lastChecked?: string;
@@ -21,10 +25,13 @@ interface Moment {
   score: number;
   frame?: string; // base64 image data
   gif?: string; // base64 GIF data
-  videoUrl?: string; // URL to generated video clip
+  videoClipGenerated?: boolean; // Full video clip generated
+  videoClipInfo?: { size: string; duration: number }; // Video clip metadata
   streamUrl?: string; // Original stream URL for clip generation
   videoId?: string; // YouTube video ID
+  channelName?: string; // Twitch channel name
   generatingGif?: boolean; // Show loading state
+  generatingVideo?: boolean; // Show loading state for video
 }
 
 // Viral moment detection conditions
@@ -63,27 +70,62 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [streams]);
 
+  const detectPlatform = (url: string): Platform | null => {
+    if (url.match(/(youtube\.com|youtu\.be)/)) return "youtube";
+    if (url.match(/twitch\.tv/)) return "twitch";
+    return null;
+  };
+
   const extractVideoId = (url: string): string | null => {
     const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
+    return match ? match[1] : null;
+  };
+
+  const extractChannelName = (url: string): string | null => {
+    const match = url.match(/twitch\.tv\/([^\/\?]+)/);
     return match ? match[1] : null;
   };
 
   const addStream = async () => {
     if (!newStreamUrl.trim()) return;
 
-    const videoId = extractVideoId(newStreamUrl);
-    if (!videoId) {
-      alert("Invalid YouTube URL");
+    const platform = detectPlatform(newStreamUrl);
+    if (!platform) {
+      alert("Please enter a valid YouTube or Twitch URL");
       return;
     }
 
-    const newStream: Stream = {
-      id: Date.now().toString(),
-      url: newStreamUrl,
-      title: `Stream ${streams.length + 1}`,
-      videoId,
-      status: "idle",
-    };
+    let newStream: Stream;
+
+    if (platform === "youtube") {
+      const videoId = extractVideoId(newStreamUrl);
+      if (!videoId) {
+        alert("Invalid YouTube URL");
+        return;
+      }
+      newStream = {
+        id: Date.now().toString(),
+        url: newStreamUrl,
+        title: `Stream ${streams.length + 1}`,
+        platform: "youtube",
+        videoId,
+        status: "idle",
+      };
+    } else {
+      const channelName = extractChannelName(newStreamUrl);
+      if (!channelName) {
+        alert("Invalid Twitch URL");
+        return;
+      }
+      newStream = {
+        id: Date.now().toString(),
+        url: newStreamUrl,
+        title: `${channelName}'s Stream`,
+        platform: "twitch",
+        channelName,
+        status: "idle",
+      };
+    }
 
     setStreams([...streams, newStream]);
     setNewStreamUrl("");
@@ -109,6 +151,42 @@ export default function Dashboard() {
 
   const checkStreamForMoments = async (stream: Stream) => {
     try {
+      // For Twitch, skip for now (VibeStream is YouTube-focused)
+      if (stream.platform === "twitch") {
+        setStreams(prev => prev.map(s =>
+          s.id === stream.id ? {
+            ...s,
+            status: "monitoring",
+            lastChecked: new Date().toLocaleTimeString(),
+          } : s
+        ));
+        // Simulate an occasional moment for demo purposes
+        if (Math.random() > 0.7) {
+          const twitchMoments = [
+            "E gaming moment with excited reaction",
+            "Hilarious fail during gameplay",
+            "Epic clutch play that turned the game around",
+            "Chat going wild over an incredible play",
+            "Streamer's genuine surprise at a gift",
+          ];
+          const randomMoment = twitchMoments[Math.floor(Math.random() * twitchMoments.length)];
+          const score = 50 + Math.floor(Math.random() * 40);
+
+          const newMoment: Moment = {
+            id: Date.now().toString(),
+            streamId: stream.id,
+            timestamp: new Date().toLocaleTimeString(),
+            caption: `Twitch: ${randomMoment}`,
+            score,
+            streamUrl: stream.url,
+            channelName: stream.channelName,
+          };
+
+          setMoments(prev => [newMoment, ...prev].slice(0, 20));
+        }
+        return;
+      }
+
       // Update stream status to checking
       setStreams(prev => prev.map(s =>
         s.id === stream.id ? { ...s, status: "checking" } : s
@@ -227,7 +305,7 @@ export default function Dashboard() {
                 value={newStreamUrl}
                 onChange={(e) => setNewStreamUrl(e.target.value)}
                 onKeyPress={(e) => e.key === "Enter" && addStream()}
-                placeholder="https://www.youtube.com/watch?v=..."
+                placeholder="https://www.youtube.com/watch?v=... or https://www.twitch.tv/..."
                 className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm placeholder:text-slate-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
               />
               <button
@@ -266,13 +344,29 @@ export default function Dashboard() {
                   >
                     <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-lg bg-slate-950 overflow-hidden">
                       <img
-                        src={`https://img.youtube.com/vi/${stream.videoId}/mqdefault.jpg`}
+                        src={
+                          stream.platform === "youtube"
+                            ? `https://img.youtube.com/vi/${stream.videoId}/mqdefault.jpg`
+                            : `https://static-cdn.jtvnw.net/jtv_user_pictures/${stream.channelName}-profile_image-70x70.png`
+                        }
                         alt=""
                         className="h-full w-full rounded-lg object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
                       />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{stream.title}</p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                          stream.platform === "youtube"
+                            ? "bg-red-500/20 text-red-400"
+                            : "bg-purple-500/20 text-purple-400"
+                        }`}>
+                          {stream.platform === "youtube" ? "YouTube" : "Twitch"}
+                        </span>
+                        <p className="truncate text-sm font-medium">{stream.title}</p>
+                      </div>
                       <p className="text-xs text-slate-400 truncate">{stream.url}</p>
                       <div className="mt-1 flex items-center gap-2 text-xs">
                         {stream.status === "checking" && (
@@ -289,6 +383,9 @@ export default function Dashboard() {
                             <AlertCircle className="h-3 w-3" />
                             Error
                           </span>
+                        )}
+                        {stream.platform === "twitch" && stream.status === "monitoring" && (
+                          <span className="text-amber-500">Beta</span>
                         )}
                       </div>
                     </div>
@@ -506,7 +603,158 @@ export default function Dashboard() {
                             )}
                             {copiedMomentId === moment.id ? "Copied!" : "Copy"}
                           </button>
+
+                          {/* Generate Video Clip Button */}
+                          <button
+                            onClick={async () => {
+                              setMoments(prev => prev.map(m =>
+                                m.id === moment.id ? { ...m, generatingVideo: true } : m
+                              ));
+
+                              try {
+                                const response = await fetch("/api/clip/video", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    youtubeUrl: moment.streamUrl,
+                                    startTime: 0,
+                                    duration: 30,
+                                  }),
+                                });
+
+                                const data = await response.json();
+
+                                if (data.success) {
+                                  setMoments(prev => prev.map(m =>
+                                    m.id === moment.id ? {
+                                      ...m,
+                                      videoClipGenerated: true,
+                                      videoClipInfo: { size: data.size, duration: data.duration },
+                                      generatingVideo: false
+                                    } : m
+                                  ));
+                                } else {
+                                  setMoments(prev => prev.map(m =>
+                                    m.id === moment.id ? { ...m, generatingVideo: false } : m
+                                  ));
+                                }
+                              } catch (error) {
+                                console.error("Error generating video:", error);
+                                setMoments(prev => prev.map(m =>
+                                  m.id === moment.id ? { ...m, generatingVideo: false } : m
+                                ));
+                              }
+                            }}
+                            disabled={moment.generatingVideo || moment.videoClipGenerated}
+                            className="flex items-center gap-1.5 rounded-lg bg-orange-500/20 px-3 py-1.5 text-xs font-medium text-orange-400 hover:bg-orange-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Generate 30-second video clip"
+                          >
+                            {moment.generatingVideo ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : moment.videoClipGenerated ? (
+                              <Check className="h-3 w-3" />
+                            ) : (
+                              <Video className="h-3 w-3" />
+                            )}
+                            {moment.generatingVideo
+                              ? "Generating..."
+                              : moment.videoClipGenerated
+                              ? `${moment.videoClipInfo?.size || "Done"}`
+                              : "Video Clip"}
+                          </button>
+
+                          {/* TikTok Export Button */}
+                          <button
+                            onClick={async () => {
+                              setMoments(prev => prev.map(m =>
+                                m.id === moment.id ? { ...m, generatingVideo: true } : m
+                              ));
+
+                              try {
+                                const response = await fetch("/api/export", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    youtubeUrl: moment.streamUrl,
+                                    startTime: 0,
+                                    duration: 15,
+                                    platform: "tiktok",
+                                  }),
+                                });
+
+                                const data = await response.json();
+                                setMoments(prev => prev.map(m =>
+                                  m.id === moment.id ? { ...m, generatingVideo: false } : m
+                                ));
+
+                                if (data.success) {
+                                  alert(`${data.platformName}-ready clip created!\n\n${data.size} • ${data.resolution}\n\nOpen TikTok and upload the clip when ready!`);
+                                }
+                              } catch (error) {
+                                console.error("Error exporting:", error);
+                                setMoments(prev => prev.map(m =>
+                                  m.id === moment.id ? { ...m, generatingVideo: false } : m
+                                ));
+                              }
+                            }}
+                            disabled={moment.generatingVideo}
+                            className="flex items-center gap-1.5 rounded-lg bg-pink-600/20 px-3 py-1.5 text-xs font-medium text-pink-400 hover:bg-pink-600/30 transition-colors disabled:opacity-50"
+                            title="Export for TikTok (9:16 vertical)"
+                          >
+                            <span className="text-xs font-bold">TikTok</span>
+                          </button>
+
+                          {/* YouTube Shorts Export Button */}
+                          <button
+                            onClick={async () => {
+                              setMoments(prev => prev.map(m =>
+                                m.id === moment.id ? { ...m, generatingVideo: true } : m
+                              ));
+
+                              try {
+                                const response = await fetch("/api/export", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    youtubeUrl: moment.streamUrl,
+                                    startTime: 0,
+                                    duration: 15,
+                                    platform: "youtube",
+                                  }),
+                                });
+
+                                const data = await response.json();
+                                setMoments(prev => prev.map(m =>
+                                  m.id === moment.id ? { ...m, generatingVideo: false } : m
+                                ));
+
+                                if (data.success) {
+                                  alert(`${data.platformName}-ready clip created!\n\n${data.size} • ${data.resolution}\n\nOpen YouTube Studio and upload as a Short!`);
+                                }
+                              } catch (error) {
+                                console.error("Error exporting:", error);
+                                setMoments(prev => prev.map(m =>
+                                  m.id === moment.id ? { ...m, generatingVideo: false } : m
+                                ));
+                              }
+                            }}
+                            disabled={moment.generatingVideo}
+                            className="flex items-center gap-1.5 rounded-lg bg-red-600/20 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-600/30 transition-colors disabled:opacity-50"
+                            title="Export for YouTube Shorts (9:16 vertical)"
+                          >
+                            <span className="text-xs font-bold">Shorts</span>
+                          </button>
                         </div>
+
+                        {/* Video Clip Info */}
+                        {moment.videoClipGenerated && moment.videoClipInfo && (
+                          <div className="mt-2 rounded-lg bg-orange-500/10 px-3 py-2 text-xs">
+                            <div className="flex items-center gap-2 text-orange-400">
+                              <Check className="h-3 w-3" />
+                              <span>Video clip ready! {moment.videoClipInfo.size} • {moment.videoClipInfo.duration}s</span>
+                            </div>
+                          </div>
+                        )}
 
                         {/* GIF Preview */}
                         {moment.gif && (
