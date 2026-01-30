@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
     // Generate unique filename
     const clipId = randomBytes(8).toString("hex");
     const outputPath = `/tmp/clip-${clipId}.mp4`;
+    const publicPath = `/Users/aclaw/clipbot/public/clips/${clipId}.mp4`;
 
     // Download video segment using yt-dlp
     // Use best available format that works
@@ -82,21 +83,20 @@ export async function POST(request: NextRequest) {
     // Get file size in MB
     const sizeMB = (videoBuffer.length / (1024 * 1024)).toFixed(2);
 
+    // Copy to public directory for download
+    await fs.writeFile(publicPath, videoBuffer);
+
     // Clean up temp file
     await unlink(outputPath).catch(() => {});
 
-    // Return video info (not the full video to avoid size limits)
-    // In production, you'd upload to cloud storage and return URL
+    // Return download URL and video info
     return NextResponse.json({
       success: true,
       clipId,
+      downloadUrl: `/clips/${clipId}.mp4`,
       size: sizeMB + " MB",
       duration,
-      // For demo, return a smaller base64 preview or just metadata
-      // Full video would be too large for JSON response
       message: "Video clip generated successfully",
-      // Uncomment if you want to return base64 (warning: large!)
-      // videoData: videoBuffer.slice(0, 1000000).toString("base64"), // First 1MB preview
     });
 
   } catch (error) {

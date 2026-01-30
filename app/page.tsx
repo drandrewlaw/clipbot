@@ -27,6 +27,7 @@ interface Moment {
   gif?: string; // base64 GIF data
   videoClipGenerated?: boolean; // Full video clip generated
   videoClipInfo?: { size: string; duration: number }; // Video clip metadata
+  videoClipDownloadUrl?: string; // URL to download the clip
   streamUrl?: string; // Original stream URL for clip generation
   videoId?: string; // YouTube video ID
   channelName?: string; // Twitch channel name
@@ -630,6 +631,7 @@ export default function Dashboard() {
                                       ...m,
                                       videoClipGenerated: true,
                                       videoClipInfo: { size: data.size, duration: data.duration },
+                                      videoClipDownloadUrl: data.downloadUrl,
                                       generatingVideo: false
                                     } : m
                                   ));
@@ -749,9 +751,24 @@ export default function Dashboard() {
                         {/* Video Clip Info */}
                         {moment.videoClipGenerated && moment.videoClipInfo && (
                           <div className="mt-2 rounded-lg bg-orange-500/10 px-3 py-2 text-xs">
-                            <div className="flex items-center gap-2 text-orange-400">
+                            <div className="flex items-center gap-3 text-orange-400">
                               <Check className="h-3 w-3" />
-                              <span>Video clip ready! {moment.videoClipInfo.size} • {moment.videoClipInfo.duration}s</span>
+                              <span>Video ready! {moment.videoClipInfo.size} • {moment.videoClipInfo.duration}s</span>
+                              {moment.videoClipDownloadUrl && (
+                                <button
+                                  onClick={() => {
+                                    const link = document.createElement("a");
+                                    link.href = moment.videoClipDownloadUrl;
+                                    link.download = `clipbot-clip-${moment.id}.mp4`;
+                                    link.click();
+                                  }}
+                                  className="flex items-center gap-1 rounded bg-orange-500/20 px-2 py-1 hover:bg-orange-500/30 transition-colors"
+                                  title="Download video clip"
+                                >
+                                  <Download className="h-3 w-3" />
+                                  Download
+                                </button>
+                              )}
                             </div>
                           </div>
                         )}
