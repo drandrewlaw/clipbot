@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Play, Pause, Sparkles, Clock, TrendingUp, Loader2, AlertCircle, Download, Video, Image as ImageIcon, Gift } from "lucide-react";
+import { Plus, Play, Pause, Sparkles, Clock, TrendingUp, Loader2, AlertCircle, Download, Video, Image as ImageIcon, Gift, Share2, Copy, Check } from "lucide-react";
 
 interface Stream {
   id: string;
@@ -46,6 +46,7 @@ export default function Dashboard() {
   const [moments, setMoments] = useState<Moment[]>([]);
   const [newStreamUrl, setNewStreamUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [copiedMomentId, setCopiedMomentId] = useState<string | null>(null);
 
   // Poll streams that are in monitoring state
   useEffect(() => {
@@ -467,6 +468,43 @@ export default function Dashboard() {
                           >
                             <Video className="h-3 w-3" />
                             Video
+                          </button>
+
+                          {/* Share Button */}
+                          <button
+                            onClick={() => {
+                              const shareText = `🎬 Viral moment detected by ClipBot!\n\n${moment.caption}\n\n⭐ Viral Score: ${moment.score}%\n\n🔗 Detected by ClipBot - Viral Moment Detective`;
+                              const shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent("https://clipbot-tawny.vercel.app")}&hashtags=ViralMoment,ClipBot,AI`;
+                              window.open(shareUrl, "_blank");
+                            }}
+                            className="flex items-center gap-1.5 rounded-lg bg-sky-500/20 px-3 py-1.5 text-xs font-medium text-sky-400 hover:bg-sky-500/30 transition-colors"
+                            title="Share to X/Twitter"
+                          >
+                            <Share2 className="h-3 w-3" />
+                            Share
+                          </button>
+
+                          {/* Copy Button */}
+                          <button
+                            onClick={async () => {
+                              const copyText = `🎬 Viral moment detected by ClipBot!\n\n${moment.caption}\n\n⭐ Viral Score: ${moment.score}%\n\n🔗 https://clipbot-tawny.vercel.app`;
+                              try {
+                                await navigator.clipboard.writeText(copyText);
+                                setCopiedMomentId(moment.id);
+                                setTimeout(() => setCopiedMomentId(null), 2000);
+                              } catch (err) {
+                                console.error("Failed to copy:", err);
+                              }
+                            }}
+                            className="flex items-center gap-1.5 rounded-lg bg-slate-500/20 px-3 py-1.5 text-xs font-medium text-slate-400 hover:bg-slate-500/30 transition-colors"
+                            title="Copy to clipboard"
+                          >
+                            {copiedMomentId === moment.id ? (
+                              <Check className="h-3 w-3 text-green-400" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
+                            {copiedMomentId === moment.id ? "Copied!" : "Copy"}
                           </button>
                         </div>
 
