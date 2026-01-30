@@ -68,17 +68,12 @@ export async function POST(request: NextRequest) {
 
     await execAsync(paletteCommand, { timeout: 30000 });
 
-    // Generate GIF using palette
-    const gifCommand = [
-      "ffmpeg",
-      "-i", videoPath,
-      "-i", palettePath,
-      "-lavfi", `fps=${fps},scale=${width}:-1:flags=lanczos[x];[x][1:v]paletteuse`,
-      "-y",
-      gifPath,
-    ].join(" ");
+    // Generate GIF using palette - use shell option to handle complex filter
+    const gifCommand = `ffmpeg -i ${videoPath} -i ${palettePath} \
+      -filter_complex "fps=${fps},scale=${width}:-1:flags=lanczos[x];[x][1:v]paletteuse" \
+      -y ${gifPath}`;
 
-    await execAsync(gifCommand, { timeout: 30000 });
+    await execAsync(gifCommand, { timeout: 30000, shell: "/bin/bash" });
 
     // Read the GIF file
     const fs = await import("fs/promises");
