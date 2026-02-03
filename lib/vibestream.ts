@@ -1,4 +1,4 @@
-const VIBESTREAM_API = "https://vibestream.machinefi.com";
+const VIBESTREAM_API = "https://trio.machinefi.com";
 
 export interface CheckOnceRequest {
   youtube_url: string;
