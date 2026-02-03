@@ -758,7 +758,7 @@ export default function Dashboard() {
                                 <button
                                   onClick={() => {
                                     const link = document.createElement("a");
-                                    link.href = moment.videoClipDownloadUrl;
+                                    link.href = moment.videoClipDownloadUrl!;
                                     link.download = `clipbot-clip-${moment.id}.mp4`;
                                     link.click();
                                   }}
